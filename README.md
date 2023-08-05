@@ -2,13 +2,19 @@
 
 Notes on deploying a single site [WordPress FPM Edition](https://hub.docker.com/_/wordpress/) instance as a docker deployment orchestrated by Docker Compose.
 
+![WordPress](./imgs/wp.png)
+![Nginx](./imgs/nginx.png)
+![MySQL](./imgs/mysql.png)
+
 - Use the FPM version of WordPress (v6.2.2-fpm)
 - Use MySQL as the database (v8)
 - Use Nginx as the web server (v1)
 - Use phpMyAdmin (v5) or Adminer (v4) as the database management tool [optional]
 - Include self-signed SSL certificate ([Let's Encrypt localhost](https://letsencrypt.org/docs/certificates-for-localhost/) format)
 
-**DISCLAIMER: The code herein may not be up to date nor compliant with the most recent package and/or security notices. Use at your own risk.**
+**- DISCLAIMER: The code herein may not be up to date nor compliant with the most recent package and/or security notices. Use at your own risk.**
+
+**- Note: This if a fork of [`mjstealey/wordpress-nginx-docker`](https://github.com/mjstealey/wordpress-nginx-docker), which seems not to be maintained anymore since Jan 2022. .**
 
 ## Table of contents
 
@@ -40,9 +46,12 @@ Both Docker and Docker Compose are required on the host to run this code
 ## <a name="config"></a>Configuration
 
 Copy the `env.template` file as `.env` and populate according to your environment
+```console
+$ cp env.template .env
+```
 
 ```ini
-# docker-compose environment file
+# docker compose environment file
 #
 # When you set the same environment variable in multiple files,
 # here’s the priority used by Compose to choose which value to use:
@@ -169,25 +178,25 @@ Included `uploads.ini` file allows for **Maximum upload file size: 75 MB**
 
 ## <a name="deploy"></a>Deploy
 
-Once configured the containers can be brought up using Docker Compose
+Once configured the containers can be brought up using Docker Compose:
 
 1. Set the environment variables and pull the images
 
     ```console
-    source .env
-    docker-compose pull
+    $ source .env
+    $ docker compose pull
     ```
 
 2. Bring up the Database and allow it a moment to create the WordPress user and database tables
 
     ```console
-    docker-compose up -d database
+    $ docker compose up -d database
     ```
     
     You will know it's ready when you see something like this in the docker logs
     
     ```console
-    $ docker-compose logs database
+    $ docker compose logs database
     wp-database  | 2022-01-28 13:40:18+00:00 [Note] [Entrypoint]: Entrypoint script for MySQL Server 8.0.28-1debian10 started.
     wp-database  | 2022-01-28 13:40:18+00:00 [Note] [Entrypoint]: Switching to dedicated user 'mysql'
     wp-database  | 2022-01-28 13:40:18+00:00 [Note] [Entrypoint]: Entrypoint script for MySQL Server 8.0.28-1debian10 started.
@@ -212,20 +221,20 @@ Once configured the containers can be brought up using Docker Compose
 3. Bring up the WordPress and Nginx containers
 
     ```console
-    docker-compose up -d wordpress nginx
+    $ docker compose up -d wordpress nginx
     ```
     
     After a few moments the containers should be observed as running
     
     ```console
-    $ docker-compose ps
+    $ docker compose ps
     NAME                COMMAND                  SERVICE             STATUS              PORTS
     wp-database         "docker-entrypoint.s…"   database            running             33060/tcp
     wp-nginx            "/docker-entrypoint.…"   nginx               running             0.0.0.0:8080->80/tcp, 0.0.0.0:8443->443/tcp
     wp-wordpress        "docker-entrypoint.s…"   wordpress           running             9000/tcp
     ```
 
-The WordPress application can be reached at the designated host and port (e.g. [https://127.0.0.1:8443]()).
+The WordPress application can be reached at the designated host and port (e.g. [https://127.0.0.1:8443]() as described in `nginx/default.conf` on line 9. Note that WordPress over port 8443 is reachable using `https://`).
 
 - **NOTE**: you will likely have to acknowledge the security risk if using the included self-signed certificate.
 
@@ -236,14 +245,37 @@ Complete the initial WordPress installation process, and when completed you shou
 ![](./imgs/WP-dashboard.png)
 ![](./imgs/WP-view-site.png)
 
-## <a name="adminer"></a>Adminer
+## <a name="adminer"></a>phpMyAdmin & Adminer
 
-An Adminer configuration has been included in the `docker-compose.yml` definition file, but commented out. Since it bypasses Nginx it is recommended to only use Adminer as needed, and to not let it run continuously.
+Two phpMyAdmin and Adminer configurations have been included in the `docker-compose.yml` definition file, but commented out. Since they bypass Nginx it is recommended to only use them as needed, and to not let them run continuously.
 
-Expose Adminer by uncommenting the `adminer` section of the `docker-compose.yml` file
+These services use port 8080 as their default port inside the container. To access them on the localhost, we use a mapping to expose them on port 9000 on localhost.
+
+
+Expose phpMyAdmin/Adminer by uncommenting the `phpMyAdmin`/`adminer` section of the `docker-compose.yml` file
 
 ```yaml
 ...
+
+  # phpMyAdmin - bring up only as needed - bypasses nginx
+  phpmyadmin:
+    # default port 8080
+    image: phpmyadmin:5
+    container_name: wp-phpmyadmin
+    restart: unless-stopped
+    networks:
+      - wordpress
+    depends_on:
+      - database
+    ports:
+      - "9000:8080"
+
+...
+```
+or
+```yaml
+...
+
   # adminer - bring up only as needed - bypasses nginx
   adminer:
     # default port 8080
@@ -256,19 +288,27 @@ Expose Adminer by uncommenting the `adminer` section of the `docker-compose.yml`
       - database
     ports:
       - "9000:8080"
+
 ...
 ```
 
-And run the `adminer` container
+And run the `phpMyAdmin`/`adminer` container
 
 ```console
-$ docker-compose up -d adminer
+$ docker compose up -d phpmyadmin
+[+] Running 2/2
+ ⠿ Container wp-database  Running                                                                                                      0.0s
+ ⠿ Container wp-adminer   Started                                                                                                      0.9s
+```
+or
+```console
+$ docker compose up -d adminer
 [+] Running 2/2
  ⠿ Container wp-database  Running                                                                                                      0.0s
  ⠿ Container wp-adminer   Started                                                                                                      0.9s
 ```
 
-Since Adminer is bypassing our Nginx configuration it will be running over HTTP in plain text on port 9000 (e.g. [http://127.0.0.1:9000/]())
+Since phpMyAdmin/Adminer is bypassing our Nginx configuration it will be running over HTTP in plain text on port 9000 (e.g. [http://127.0.0.1:9000/]())
 
 ![](./imgs/WP-adminer.png)
 
@@ -282,20 +322,31 @@ Example connection information:
 - Password: **password123!**
 - Database: **wordpress**
 
-    **NOTE**: Since `adminer` is defined in the same docker-compose file as the MySQL Database it will "understand" the **Server** reference as **database**, otherwise this would need to be a formal URL reference
+    **NOTE**: Since `phpMyAdmin`/`adminer` is defined in the same docker compose file as the MySQL Database it will "understand" the **Server** reference as **database**, otherwise this would need to be a formal URL reference
 
 ![](./imgs/WP-adminer-connected.png)
 
-When finished, stop and remove the `adminer` container.
+When finished, stop and remove the `phpMyAdmin`/`adminer` container.
+```console
+$ docker compose stop phpmyadmin
+[+] Running 1/1
+ ⠿ Container wp-phpmyadmin  Stopped                                         0.1s
+
+$ docker compose rm -fv phpmyadmin
+Going to remove wp-phpmyadmin
+[+] Running 1/0
+ ⠿ Container wp-phpmyadmin  Removed                                         0.0s
+ ```
+ or
 
 ```console
-$ docker-compose stop adminer
+$ docker compose stop adminer
 [+] Running 1/1
- ⠿ Container wp-adminer  Stopped                                                                                                       0.1s
-$ docker-compose rm -fv adminer
+ ⠿ Container wp-adminer  Stopped                                            0.1s
+$ docker compose rm -fv adminer
 Going to remove wp-adminer
 [+] Running 1/0
- ⠿ Container wp-adminer  Removed                                                                                                       0.0s
+ ⠿ Container wp-adminer  Removed                                            0.0s
 ```
 
 ## <a name="teardown"></a>Teardown
@@ -305,8 +356,8 @@ For a complete teardown all containers must be stopped and removed along with th
 Commands
 
 ```console
-docker-compose stop
-docker-compose rm -fv
+docker compose stop
+docker compose rm -fv
 docker-network rm wp-wordpress
 # removal calls may require sudo rights depending on file permissions
 rm -rf ./wordpress
@@ -317,12 +368,12 @@ rm -rf ./logs
 Expected output
 
 ```console
-$ docker-compose stop
+$ docker compose stop
 [+] Running 3/3
  ⠿ Container wp-nginx      Stopped                                                                                                     0.3s
  ⠿ Container wp-wordpress  Stopped                                                                                                     0.2s
  ⠿ Container wp-database   Stopped                                                                                                     0.8s
-$ docker-compose rm -fv
+$ docker compose rm -fv
 Going to remove wp-nginx, wp-wordpress, wp-database
 [+] Running 3/0
  ⠿ Container wp-nginx      Removed                                                                                                     0.0s
