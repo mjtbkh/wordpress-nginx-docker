@@ -2,10 +2,14 @@
 
 Notes on deploying a single site [WordPress FPM Edition](https://hub.docker.com/_/wordpress/) instance as a docker deployment orchestrated by Docker Compose.
 
-![WordPress](./imgs/wp.png)
-![Nginx](./imgs/nginx.png)
-![MySQL](./imgs/mysql.png)
-
+<p style="align-items: center;
+display: flex;
+justify-content: center;
+gap: 15px;">
+<img src="./imgs/wp.png" width="96" />
+<img src="./imgs/nginx.png" width="128" />
+<img src="./imgs/mysql.png" width="96" />
+</p>
 - Use the FPM version of WordPress (v6.2.2-fpm)
 - Use MySQL as the database (v8)
 - Use Nginx as the web server (v1)
